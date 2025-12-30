@@ -26,11 +26,11 @@
 #define VIRTIO0_IRQ 1
 
 // qemu puts platform-level interrupt controller (PLIC) here.
-#define PLIC 0x0c000000L
-#define PLIC_PRIORITY (PLIC + 0x0)
-#define PLIC_PENDING (PLIC + 0x1000)
-#define PLIC_SENABLE(hart) (PLIC + 0x2080 + (hart)*0x100)
-#define PLIC_SPRIORITY(hart) (PLIC + 0x201000 + (hart)*0x2000)
+#define PLIC 0x0c000000L // PLIC 基址
+#define PLIC_PRIORITY (PLIC + 0x0) // 设置中断源 id 的优先级（0-7）
+#define PLIC_PENDING (PLIC + 0x1000) // 32 位位图，只读，看哪些中断正在 pending
+#define PLIC_SENABLE(hart) (PLIC + 0x2080 + (hart)*0x100) // S-mode enable 位图（每 hart 一页）
+#define PLIC_SPRIORITY(hart) (PLIC + 0x201000 + (hart)*0x2000) // 当前 hart 的 S-mode 阈值
 #define PLIC_SCLAIM(hart) (PLIC + 0x201004 + (hart)*0x2000)
 
 // the kernel expects there to be RAM

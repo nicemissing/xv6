@@ -165,7 +165,7 @@ prepare_return(void)
 
 // interrupts and exceptions from kernel code go here via kernelvec,
 // on whatever the current kernel stack is.
-// 来自内核代码的中断和异常通过kernelvec来到这里，
+// 来自内核代码的中断和异常通过kernelvec来到这里，这里其实也在内核态，类似于普通函数调用，保存现场然后执行该函数，结束后就恢复现场
 // 使用当前的内核栈，在跳板函数中已通过汇编切换了内核栈指针
 // 输入：无（通过寄存器获取陷阱信息），主要是时钟中断处理
 // 输出：处理内核态中断/异常
@@ -192,8 +192,9 @@ kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   // 如果是定时器中断且有进程在运行，让出CPU
+  // 一旦执行sched让出cpu代码就保存现场不再执行，反而去执行scheduler调度器，等到调度器再次执行本进程的时候继续从这里执行剩下的代码，准备返回用户态
   if(which_dev == 2 && myproc() != 0)
-    yield();
+    yield(); 
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
@@ -231,33 +232,45 @@ clockintr()
 int
 devintr()
 {
+  // 读取scause寄存器，该寄存器存储了导致陷阱的原因
   uint64 scause = r_scause();
-
+  // 检查是否为监管者外部中断（通过PLIC）
+  // 0x8000000000000009L 是RISC-V中监管者外部中断的scause值
+  // 最高位为1表示中断，低4位为9表示外部中断
   if(scause == 0x8000000000000009L){
     // this is a supervisor external interrupt, via PLIC.
 
     // irq indicates which device interrupted.
+    // irq指示哪个设备产生了中断
+    // plic_claim()从PLIC读取中断请求号，并告知PLIC正在处理该中断
     int irq = plic_claim();
-
+    // 根据中断号分发到具体的设备中断处理程序
     if(irq == UART0_IRQ){
-      uartintr();
+      uartintr(); // 处理UART串口中断（控制台输入输出）
     } else if(irq == VIRTIO0_IRQ){
-      virtio_disk_intr();
+      virtio_disk_intr(); // 处理VirtIO磁盘中断（磁盘I/O完成）
     } else if(irq){
+      // 未知的中断号，打印错误信息
       printf("unexpected interrupt irq=%d\n", irq);
     }
 
     // the PLIC allows each device to raise at most one
     // interrupt at a time; tell the PLIC the device is
     // now allowed to interrupt again.
+    // PLIC允许每个设备一次最多产生一个中断
+    // 告诉PLIC该设备的中断已经处理完成，可以再次产生中断
     if(irq)
       plic_complete(irq);
 
-    return 1;
-  } else if(scause == 0x8000000000000005L){
+    return 1; // 返回1表示已处理设备中断
+  } 
+  // 检查是否为定时器中断
+  // 0x8000000000000005L 是RISC-V中监管者定时器中断的scause值
+  // 最高位为1表示中断，低4位为5表示定时器中断
+  else if(scause == 0x8000000000000005L){
     // timer interrupt.
-    clockintr();
-    return 2;
+    clockintr(); // 调用定时器中断处理函数
+    return 2; // 返回2表示定时器中断
   } else {
     return 0;
   }
