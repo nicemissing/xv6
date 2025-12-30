@@ -15,6 +15,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "virtio.h"
+#include "proc.h"
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO0 + (r)))
@@ -244,7 +245,9 @@ virtio_disk_rw(struct buf *b, int write)
   buf0->reserved = 0;
   buf0->sector = sector;
 
-  disk.desc[idx[0]].addr = (uint64) buf0;
+  // disk.desc[idx[0]].addr = (uint64) buf0;
+  // lab3
+  disk.desc[idx[0]].addr = (uint64) kvmpa(myproc()->kpagetable, (uint64) buf0);  // 调用 myproc()获取进程内核页表
   disk.desc[idx[0]].len = sizeof(struct virtio_blk_req);
   disk.desc[idx[0]].flags = VRING_DESC_F_NEXT;
   disk.desc[idx[0]].next = idx[1];

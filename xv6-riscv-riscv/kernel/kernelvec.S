@@ -6,14 +6,16 @@
         # push registers, call kerneltrap().
         # when kerneltrap() returns, restore registers, return.
         #
+        #这是内核态的中断处理程序，内核trap之后的处理
 .globl kerneltrap
 .globl kernelvec
 .align 4
 kernelvec:
         # make room to save registers.
-        addi sp, sp, -256
+        addi sp, sp, -256 # 在栈上分配256字节空间用于保存寄存器（32个寄存器 * 8字节 = 256字节）
 
         # save caller-saved registers.
+        # 按照RISC-V调用约定，在调用C函数前保存这些寄存器
         sd ra, 0(sp)
         # sd sp, 8(sp)
         sd gp, 16(sp)
@@ -35,9 +37,11 @@ kernelvec:
         sd t6, 240(sp)
 
         # call the C trap handler in trap.c
+        # 调用trap.c中的C陷阱处理函数
         call kerneltrap
 
         # restore registers.
+        # 恢复之前保存的寄存器
         ld ra, 0(sp)
         # ld sp, 8(sp)
         ld gp, 16(sp)

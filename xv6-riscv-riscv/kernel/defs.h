@@ -169,7 +169,15 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 int             ismapped(pagetable_t, uint64);
 uint64          vmfault(pagetable_t, uint64, int);
-
+// int             copyin_new(pagetable_t, char*, uint64, uint64);
+// int             copyinstr_new(pagetable_t, char*, uint64, uint64);
+// lab3
+pagetable_t     ukvminit();
+void            ukvmmap(pagetable_t kpagetable, uint64 va, uint64 pa, uint64 sz, int perm);
+uint64          kvmpa(pagetable_t pgtbl, uint64 va);
+void            proc_freewalk(pagetable_t pagetable);
+int             u2kvmcopy(pagetable_t upgtbl, pagetable_t kpgtbl, uint64 begin, uint64 end);
+uint64          kama_kvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz);
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);

@@ -40,11 +40,15 @@ w_mepc(uint64 x)
 }
 
 // Supervisor Status Register, sstatus
-
+// 进入trap前的cpu模式
 #define SSTATUS_SPP (1L << 8)  // Previous mode, 1=Supervisor, 0=User
+// 进入 trap 前 S-mode 中断是否开启，指的是时钟、串口、外设
 #define SSTATUS_SPIE (1L << 5) // Supervisor Previous Interrupt Enable
+// 进入 trap 前 U-mode 中断是否开启，指的是用户态信号、驱动等
 #define SSTATUS_UPIE (1L << 4) // User Previous Interrupt Enable
+// 当前 S-mode 中断总开关
 #define SSTATUS_SIE (1L << 1)  // Supervisor Interrupt Enable
+// 当前 U-mode 中断总开关
 #define SSTATUS_UIE (1L << 0)  // User Interrupt Enable
 
 static inline uint64
@@ -161,7 +165,7 @@ w_mideleg(uint64 x)
 static inline void 
 w_stvec(uint64 x)
 {
-  asm volatile("csrw stvec, %0" : : "r" (x));
+  asm volatile("csrw stvec, %0" : : "r" (x)); //  把 x 的值写进 CSR 寄存器 stvec
 }
 
 static inline uint64
@@ -254,6 +258,7 @@ static inline uint64
 r_stval()
 {
   uint64 x;
+  // 得到出现故障的虚拟地址
   asm volatile("csrr %0, stval" : "=r" (x) );
   return x;
 }
@@ -351,8 +356,9 @@ typedef uint64 *pagetable_t; // 512 PTEs
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
-
+// 向上取整
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
+// 抹除偏移
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
 #define PTE_V (1L << 0) // valid
@@ -362,6 +368,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PTE_U (1L << 4) // user can access
 
 // shift a physical address to the right place for a PTE.
+// PTE包含44位物理页号和10位的标记位，所以需要左移10位
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
 #define PTE2PA(pte) (((pte) >> 10) << 12)
@@ -377,4 +384,5 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
+// 最大的虚拟地址空间，这里使用39位
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))

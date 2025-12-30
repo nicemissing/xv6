@@ -5,7 +5,7 @@
             "name": "xv6debug",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/xv6-riscv-riscv/user/_primes",
+            "program": "${workspaceFolder}/xv6-riscv-riscv/kernel/kernel",
             "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "miDebuggerServerAddress": "127.0.0.1:26000", //见.gdbinit 中 target remote xxxx:xx

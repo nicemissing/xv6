@@ -6,7 +6,7 @@
 
 void main();
 void timerinit();
-
+// 这段代码是 xv6 内核的启动入口，负责从机器模式（M-mode）切换到监管者模式（S-mode），并完成所有必要的硬件配置，最终跳转到 main() 开始运行操作系统。
 // entry.S needs one stack per CPU.
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
 

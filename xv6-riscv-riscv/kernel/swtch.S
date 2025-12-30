@@ -3,13 +3,14 @@
 #   void swtch(struct context *old, struct context *new);
 # 
 # Save current registers in old. Load from new.	
-
+# 保存当前上下文，恢复新上下文，用于进程之间切换
+# sd是把寄存器保存到栈中，ld是把栈中的数据恢复到寄存器中
 
 .globl swtch
 swtch:
         sd ra, 0(a0)
-        sd sp, 8(a0)
-        sd s0, 16(a0)
+        sd sp, 8(a0) 
+        sd s0, 16(a0) // s0-s11是线程的保存寄存器，从内核栈中取出的正在用于计算的局部变量和中间结果
         sd s1, 24(a0)
         sd s2, 32(a0)
         sd s3, 40(a0)

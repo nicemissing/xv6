@@ -36,6 +36,32 @@
 // the kernel expects there to be RAM
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
+/*
+    KERNBASE (0x80000000) ──┐
+                            │ 内核代码和数据
+                            │（entry.S、text、data、bss）
+    end ────────────────────┘
+                            │ 内核页分配区域
+                            │（用于分配物理页）
+    PHYSTOP ────────────────┘
+
+    物理内存布局（实际硬件）：
+    0x00000000: ┌─────────────────┐
+                │ 未使用/设备内存 │
+    0x80000000: ├─────────────────┤ ← KERNBASE
+                │ 内核代码        │
+                │ 内核数据        │
+        end:   ├─────────────────┤ ← 内核静态部分结束
+                │ 内核页分配区域  │ ← 动态管理
+                │   - 用户进程页  │
+                │   - 内核栈      │
+                │   - trapframe页 │
+                │   - 页表页      │
+                │   - 缓冲缓存    │
+                │   - 空闲页面    │
+    PHYSTOP:   └─────────────────┘ ← 内核管理结束 (128MB)
+    内核总共使用128MB物理内存
+*/
 #define KERNBASE 0x80000000L
 #define PHYSTOP (KERNBASE + 128*1024*1024)
 
@@ -45,6 +71,11 @@
 
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
+/*
+ KSTACK是每个进程在内核模式下执行时使用的栈。当用户进程通过系统调用或中断进入内核时，CPU会切换到内核栈
+ 当用户程序执行系统调用时：
+    用户态 ecall → 切换到KSTACK → 执行内核代码 → 返回用户态
+*/
 #define KSTACK(p) (TRAMPOLINE - ((p)+1)* 2*PGSIZE)
 
 // User memory layout.
