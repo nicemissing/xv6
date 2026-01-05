@@ -591,7 +591,6 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
-
   if (va >= p->sz)// 检查虚拟地址是否在进程大小范围内
     return 0;
   va = PGROUNDDOWN(va);// 对齐到页面边界

@@ -90,6 +90,20 @@ usertrap(void)
     // page fault on lazily-allocated page
     // 页面错误（scause=13读缺页, 15写缺页）
     // vmfault尝试处理惰性分配的页面
+    // uint64 va = r_stval();
+    // uint64 ka = (uint64) kalloc();
+    // if (ka == 0) setkilled(p);
+    // else
+    // {
+    //   memset((void*)ka, 0, PGSIZE);
+    //   va = PGROUNDDOWN(va);
+    //   if (mappages(p->pagetable, va, PGSIZE, ka, PTE_U | PTE_W| PTE_R) != 0)
+    //   {
+    //     kfree((void*)ka);
+    //     setkilled(p);
+    //   }
+    // }
+    // vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0);
   } else {
     // 未知的陷阱原因，打印信息并杀死进程
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
@@ -103,7 +117,18 @@ usertrap(void)
   // give up the CPU if this is a timer interrupt.
   // 如果是定时器中断，让出CPU（调度）
   if(which_dev == 2)
+  {
+    p->ticks_since_last_alarm += 1;
+    if(p->inalarm == 0 && p->alarm_period != 0 && p->ticks_since_last_alarm == p->alarm_period)
+    {
+      p->inalarm = 1; // 避免重复进入，有可能alarmhaddle还没有处理完就定时器开始计时导致重复进入
+      *p->alarmframe = *p->trapframe; // 备份当前寄存器
+      // 设立返回到用户态后到跳转指令地址
+      p->trapframe->epc = (uint64)p->alarm_handler;
+      // p->ticks_since_last_alarm = 0;
+    }
     yield();
+  }
 
   prepare_return();// 准备返回到用户空间
 
@@ -141,7 +166,7 @@ prepare_return(void)
 
   // set up trapframe values that uservec will need when
   // the process next traps into the kernel.
-  // 还在内核中
+  // 还在内核中，在这里设置trapframe的值，以便在进程再次进入内核时，trap发生时自动处理usertrap
   p->trapframe->kernel_satp = r_satp();         // kernel page table
   p->trapframe->kernel_sp = p->kstack + PGSIZE; // process's kernel stack
   p->trapframe->kernel_trap = (uint64)usertrap;

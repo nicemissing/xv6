@@ -139,9 +139,23 @@ found:
   p->pid = allocpid();// 分配pid
   p->state = USED; // 修改状态
 
+  // Lab4
+  p->alarm_handler = 0;
+  p->ticks_since_last_alarm = 0;
+  p->alarm_period = 0;
+  p->inalarm = 0;
+
   // Allocate a trapframe page.
   // 分配一个trapframe页面，使用物理地址或者内核虚拟地址
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // Lab4
+  // Allocate a alarmframe page. 为这个备份alarmframe分配1页物理空间
+  if((p->alarmframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -195,6 +209,9 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe); // 释放trapframe物理页
   p->trapframe = 0;
+  if(p->alarmframe)
+    kfree((void*)p->alarmframe); // 释放alarmframe物理页
+  p->alarmframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);// 释放用户页表和内存
   p->pagetable = 0;

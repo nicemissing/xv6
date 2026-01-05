@@ -131,4 +131,11 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   pagetable_t kpagetable; // the kernel table per process 专属内核页
+
+  // Lab4
+  struct trapframe *alarmframe; // // data page to restore all register when going back from alarm handler
+  int inalarm; // if the alarm handler is going on
+  int alarm_period; // Lab4 the alarm period set
+  void (*alarm_handler)(); // Lab4 the alarm function handler
+  int ticks_since_last_alarm;  // Lab4 how many ticks has elapsed since last alarm
 };
