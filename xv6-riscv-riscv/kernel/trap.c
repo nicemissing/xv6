@@ -85,8 +85,8 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // 设备中断（devintr返回非0表示已处理）
     // ok
-  } else if((r_scause() == 15 || r_scause() == 13) &&
-            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
+  } else if((r_scause() == 15 || r_scause() == 13) /*&&
+            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0*/) {
     // page fault on lazily-allocated page
     // 页面错误（scause=13读缺页, 15写缺页）
     // vmfault尝试处理惰性分配的页面
@@ -104,6 +104,20 @@ usertrap(void)
     //   }
     // }
     // vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0);
+    pte_t* pte;
+    uint64 va = r_stval();
+    // 检查地址是否合法
+    if(va >= p->sz)
+      setkilled(p);
+    pte = walk(p->pagetable, va, 0);
+    // 检查 pte 是否有效且是个 cow 页，不满足条件直接干掉进程
+    if(pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_COW) == 0)
+      setkilled(p);
+    // 如果是 cow 页面，尝试为它完成写时复制
+    if (cow_handler(p->pagetable, va)==-1)
+    {
+      setkilled(p);
+    }
   } else {
     // 未知的陷阱原因，打印信息并杀死进程
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);

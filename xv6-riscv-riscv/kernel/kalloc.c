@@ -12,6 +12,9 @@
 #include "riscv.h"
 #include "defs.h"
 
+// Lab6物理地址转页表index
+#define PA2IDX(p) (((uint64)(p))/PGSIZE)
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -29,10 +32,19 @@ struct {
   struct run *freelist; // 空闲页链表头指针
 } kmem;
 
+/* Lab6新建 page_ref 结构体，里面有个数组用来存储物理页面的
+引用次数，还有个 lock 自旋锁，用来保证多 CPU 的并发安全。*/
+struct {
+  struct spinlock lock; // 保证并发安全
+  int ref_arr[PHYSTOP/PGSIZE]; // 每个物理页面的引用次数
+} page_ref; // 模仿 kmem 新建页面引用结构
+
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&page_ref.lock, "pageref"); // 初始化 page_ref.lock
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -63,18 +75,23 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+  
+  acquire(&page_ref.lock);
+  // 只有页面的引用计数为 0，没有进程映射到该物理页了，才真正释放页面
+  if (--page_ref.ref_arr[PA2IDX(pa)]<=0){
+    // Fill with junk to catch dangling refs.
+    memset(pa, 1, PGSIZE);
 
-  // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+    r = (struct run*)pa;
 
-  r = (struct run*)pa;
-
-  // ★ 将页面加入空闲链表（需加锁） ★
-  acquire(&kmem.lock);
-  // 将当前的空闲链表头设置为当前节点，然后将当前节点设置为原链表头，这样原来的链表头前面就加入了一个新的释放节点
-  r->next = kmem.freelist;// 新节点指向原链表头
-  kmem.freelist = r;// 更新链表头为新节点
-  release(&kmem.lock);
+    // ★ 将页面加入空闲链表（需加锁） ★
+    acquire(&kmem.lock);
+    // 将当前的空闲链表头设置为当前节点，然后将当前节点设置为原链表头，这样原来的链表头前面就加入了一个新的释放节点
+    r->next = kmem.freelist;// 新节点指向原链表头
+    kmem.freelist = r;// 更新链表头为新节点
+    release(&kmem.lock);
+}
+  release(&page_ref.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -96,7 +113,43 @@ kalloc(void)
     kmem.freelist = r->next; // 相当于freelist向后移动一位
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    // 如果是新分配的有效物理页，引用计数需要为 1
+    page_ref.ref_arr[PA2IDX(r)] = 1; // 如果是新分配的有效物理页，引用计数为 1
+  }
   return (void*)r;
+}
+
+// 如果有必要，克隆一页物理页
+void *ktry_pgclone(void* pa)
+{
+  acquire(&page_ref.lock);
+  if(page_ref.ref_arr[PA2IDX(pa)]<=1)
+  {
+    release(&page_ref.lock);
+    return pa;
+  }
+
+  // 申请一页物理页
+  uint64 newpa = (uint64)kalloc();
+  if(newpa==0)
+  {
+    release(&page_ref.lock);
+    return 0;
+  }
+  // 复制老物理页内容到新页
+  memmove((void*)newpa, (void*)pa, PGSIZE);
+  // 老物理页引用减一
+  page_ref.ref_arr[PA2IDX(pa)]--;
+  release(&page_ref.lock);
+  return (void*)newpa;
+}
+
+// 增加物理页面的引用次数
+void kparef_inc(void *pa)
+{
+  acquire(&page_ref.lock);
+  page_ref.ref_arr[PA2IDX(pa)]++;
+  release(&page_ref.lock);
 }

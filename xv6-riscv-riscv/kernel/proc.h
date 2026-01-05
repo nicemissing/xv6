@@ -42,7 +42,9 @@ struct cpu {
   // 调度器上下文，当swtch()切换到这里时进入scheduler()，每个CPU有自己的调度器上下文
   struct context context;     // swtch() here to enter scheduler().
   // 中断管理相关 - 用于嵌套中断禁用
+  // 记录push_off()的调用嵌套次数，确保只有最外层的pop_off()才会重新启用中断
   int noff;                   // Depth of push_off() nesting.
+  //保存第一次调用push_off()时的中断状态，用于在noff归零时恢复正确的中断状态
   int intena;                 // Were interrupts enabled before push_off()?
 };
 

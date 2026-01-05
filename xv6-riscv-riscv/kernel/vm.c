@@ -417,7 +417,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
+  // char *mem;  Lab6修改代码
   // 遍历父进程的每个页面
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)// 获取父进程的PTE
@@ -425,15 +425,27 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)// 检查PTE是否有效
       continue;   // physical page hasn't been allocated
     pa = PTE2PA(*pte);// 获取物理地址
+    // 如果页面是可写权限，那把它标记为 COW 并移除写权限
+    if(*pte & PTE_W)
+    {
+      *pte = (*pte & ~PTE_W) | PTE_COW;
+    }
     flags = PTE_FLAGS(*pte);// 获取权限标志，取后10位
-    if((mem = kalloc()) == 0)// 为子进程分配物理页面
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);// 复制页面内容
+    // 这里取消申请内存并复制的操作
+    // if((mem = kalloc()) == 0)// 为子进程分配物理页面
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);// 复制页面内容
     // 在子进程页表中建立映射
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);// 映射失败，释放页面
+    // if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+    //   kfree(mem);// 映射失败，释放页面
+    //   goto err;
+    // }
+    // 将父进程的物理地址映射到新的页表
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
       goto err;
     }
+    // 将物理页的引用次数增加 1
+    kparef_inc((void*)pa);
   }
   return 0;
 
@@ -469,11 +481,16 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
   pte_t *pte;
+  //lab6
+  struct proc *p = myproc();
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);// 获取目标虚拟地址所在的页面起始地址
     if(va0 >= MAXVA)
       return -1;
+    // 如果是 cow 页，执行复制
+    if (va0<p->sz && (pte = walk(pagetable, va0, 0))!=0 && *pte & PTE_V && *pte & PTE_COW)
+      cow_handler(pagetable, va0);
   
     pa0 = walkaddr(pagetable, va0);// 获取物理地址
     if(pa0 == 0) {
@@ -664,4 +681,32 @@ kama_kvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz) {
     }
 
     return newsz;
+}
+
+// 处理 COW 页错误
+int cow_handler(pagetable_t pagetable, uint64 va)
+{
+  pte_t* pte;
+  // 拿到 va 对应的页表项
+  if ((pte = walk(pagetable, va, 0))==0)
+    panic("cow_handler: pte not found");
+  
+  uint64 pa = PTE2PA(*pte);
+  uint64 newpa;
+  va = PGROUNDDOWN(va);
+  // 转为 pa 丢到 kalloc 里面处理，因为涉及到物理页的记数操作
+  if((newpa = (uint64)ktry_pgclone((void*)pa))!=0)
+  {
+    // 重新修改为可写，并删除 cow 标识
+    uint64 flags = (PTE_FLAGS(*pte)|PTE_W) & ~PTE_COW;
+    // 解除原来的映射，注意最后一个参数要传0，不释放物理页
+    uvmunmap(pagetable, PGROUNDDOWN(va), 1,0);
+    // 重新映射
+    if(mappages(pagetable,va,PGSIZE, newpa, flags)== -1)
+    {
+      panic("uvmcopy:mappages");
+    }
+    return 0;
+  }
+  return -1;
 }

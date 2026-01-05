@@ -59,6 +59,8 @@ void            ireclaim(int);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void*           ktry_pgclone(void* pa);
+void            kparef_inc(void *pa);
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -178,6 +180,8 @@ uint64          kvmpa(pagetable_t pgtbl, uint64 va);
 void            proc_freewalk(pagetable_t pagetable);
 int             u2kvmcopy(pagetable_t upgtbl, pagetable_t kpgtbl, uint64 begin, uint64 end);
 uint64          kama_kvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz);
+int             cow_handler(pagetable_t pagetable, uint64 va);
+
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);
