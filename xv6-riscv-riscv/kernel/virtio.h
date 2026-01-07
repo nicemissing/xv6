@@ -31,12 +31,14 @@
 #define VIRTIO_MMIO_DEVICE_DESC_HIGH	0x0a4
 
 // status register bits, from qemu virtio_config.h
-#define VIRTIO_CONFIG_S_ACKNOWLEDGE	1
-#define VIRTIO_CONFIG_S_DRIVER		2
-#define VIRTIO_CONFIG_S_DRIVER_OK	4
-#define VIRTIO_CONFIG_S_FEATURES_OK	8
+// 状态寄存器位，来自qemu virtio_config.h
+#define VIRTIO_CONFIG_S_ACKNOWLEDGE	1 // 确认位
+#define VIRTIO_CONFIG_S_DRIVER		2 // 驱动程序位
+#define VIRTIO_CONFIG_S_DRIVER_OK	4 // 驱动程序OK位
+#define VIRTIO_CONFIG_S_FEATURES_OK	8 // 特性协商OK位
 
 // device feature bits
+// 设备特性位
 #define VIRTIO_BLK_F_RO              5	/* Disk is read-only */
 #define VIRTIO_BLK_F_SCSI            7	/* Supports scsi command passthru */
 #define VIRTIO_BLK_F_CONFIG_WCE     11	/* Writeback mode available in config */
@@ -47,16 +49,20 @@
 
 // this many virtio descriptors.
 // must be a power of two.
+// 描述符数量，必须是2的幂次
 #define NUM 8
 
 // a single descriptor, from the spec.
+// 单个描述符，来自规范
 struct virtq_desc {
-  uint64 addr;
-  uint32 len;
-  uint16 flags;
-  uint16 next;
+  uint64 addr; // 数据缓冲区的物理地址
+  uint32 len; // 缓冲区的长度
+  uint16 flags; // 标志位
+  uint16 next; // 链中下一个描述符的索引
 };
+// 有下一个描述符（链式）
 #define VRING_DESC_F_NEXT  1 // chained with another descriptor
+// 设备写入（vs 读取）
 #define VRING_DESC_F_WRITE 2 // device writes (vs read)
 
 // the (entire) avail ring, from the spec.
