@@ -9,6 +9,16 @@
 // routines.  The (higher-level) system call implementations
 // are in sysfile.c.
 
+// 文件系统实现。分为五层：
+//   + 块层：原始磁盘块的分配器。
+//   + 日志层：多步更新的崩溃恢复。
+//   + 文件层：inode分配器，读写和元数据。
+//   + 目录层：特殊内容的inode（其他inode的列表！）
+//   + 名称层：像 /usr/rtm/xv6/fs.c 这样的路径，方便命名。
+//
+// 这个文件包含底层的文件系统操作例程。
+// （更高层的）系统调用实现在 sysfile.c 中。
+
 #include "types.h"
 #include "riscv.h"
 #include "defs.h"
@@ -24,27 +34,34 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 // there should be one superblock per disk device, but we run with
 // only one device
-struct superblock sb; 
+// 每个磁盘设备应该有一个超级块，但我们只运行一个设备
+struct superblock sb; // 全局超级块变量，存储文件系统元数据
 
 // Read the super block.
+// 读取超级块。
+// 输入：设备号dev，超级块指针sb（用于存储读取的数据）
+// 输出：无，但填充*sb
 static void
 readsb(int dev, struct superblock *sb)
 {
-  struct buf *bp;
+  struct buf *bp; // 缓冲区指针
 
-  bp = bread(dev, 1);
-  memmove(sb, bp->data, sizeof(*sb));
-  brelse(bp);
+  bp = bread(dev, 1); // 读取设备dev的第1块（超级块固定在第1块）
+  memmove(sb, bp->data, sizeof(*sb)); // 将缓冲区数据复制到超级块结构
+  brelse(bp); // 释放缓冲区
 }
 
 // Init fs
+// 初始化文件系统。
+// 输入：设备号dev
+// 输出：无，但初始化全局超级块和日志，并回收孤儿inode
 void
-fsinit(int dev) {
-  readsb(dev, &sb);
-  if(sb.magic != FSMAGIC)
+fsinit(int dev) { 
+  readsb(dev, &sb); // 读取超级块
+  if(sb.magic != FSMAGIC) // 检查魔数，验证文件系统有效性
     panic("invalid file system");
-  initlog(dev, &sb);
-  ireclaim(dev);
+  initlog(dev, &sb); // 初始化日志系统
+  ireclaim(dev); // 回收孤儿inode（链接数为0但未删除的inode）
 }
 
 // Zero a block.
@@ -53,9 +70,9 @@ bzero(int dev, int bno)
 {
   struct buf *bp;
 
-  bp = bread(dev, bno);
-  memset(bp->data, 0, BSIZE);
-  log_write(bp);
+  bp = bread(dev, bno); // 读取块
+  memset(bp->data, 0, BSIZE); // 清零缓冲区数据
+  log_write(bp); // 记录写操作到日志（延迟写入）
   brelse(bp);
 }
 
@@ -63,6 +80,22 @@ bzero(int dev, int bno)
 
 // Allocate a zeroed disk block.
 // returns 0 if out of disk space.
+
+// 块分配。
+// 分配一个清零的磁盘块。
+// 输入：设备号dev
+// 输出：分配的块号，如果磁盘空间不足则返回0
+/*
+    b：当前位图块管理的第一个数据块的块号
+
+    bi：在位图块中的位索引（0-8191）
+
+    BPB：Bits Per Block = 1024字节 × 8位/字节 = 8192位
+
+    sb.size：文件系统中数据块的总数
+
+    bp->data：位图块的数据缓冲区（1024字节数组）
+*/
 static uint
 balloc(uint dev)
 {
@@ -70,22 +103,25 @@ balloc(uint dev)
   struct buf *bp;
 
   bp = 0;
+  // 遍历所有块，每次处理一个位图块，一个位图块对应8192个数据块
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
+    // 读取位图块
+    bp = bread(dev, BBLOCK(b, sb));// 前8192个数据块对应第一个位图块，以此类推
+    // 在位图块中查找空闲位
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
-      m = 1 << (bi % 8);
-      if((bp->data[bi/8] & m) == 0){  // Is block free?
-        bp->data[bi/8] |= m;  // Mark block in use.
-        log_write(bp);
-        brelse(bp);
-        bzero(dev, b + bi);
-        return b + bi;
+      m = 1 << (bi % 8); // 一个位图块的1024字节，看看当前位是否为0
+      if((bp->data[bi/8] & m) == 0){  // Is block free? // 检查位图中当前位是否为0，也就是对应的数据块是否空闲
+        bp->data[bi/8] |= m;  // Mark block in use. // 标记数据块为已经使用
+        log_write(bp); // 记录位图修改到日志，后续会将其提交到磁盘
+        brelse(bp); // 释放位图缓冲区
+        bzero(dev, b + bi); // 清零新分配的块
+        return b + bi; // 返回块号
       }
     }
-    brelse(bp);
+    brelse(bp); // 释放位图缓冲区
   }
   printf("balloc: out of blocks\n");
-  return 0;
+  return 0; // 磁盘空间不足
 }
 
 // Free a disk block.
