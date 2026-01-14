@@ -65,13 +65,13 @@ struct dinode {
 // Inodes per block. // 每个块能包含的inode数量
 #define IPB           (BSIZE / sizeof(struct dinode))
 
-// Block containing inode i // 计算包含inode i的块号，inode块号 = inode编号 / 每块inode数 + inode区域起始块
+// Block containing inode i // 计算第i个inode在inode区的第几块，inode块号 = inode编号 / 每块inode数 + inode区域起始块
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
 // Bitmap bits per block // 每个位图块能表示的位数（每个字节8位）
 #define BPB           (BSIZE*8)
 
-// Block of free map containing bit for block b // 计算包含块b的位图块的块号，位图块号 = 数据块号 / 每块位数 + 位图区域起始块
+// Block of free map containing bit for block b // 计算数据块b对应在哪个位图块中，位图块号 = 数据块号 / 每块位数 + 位图区域起始块
 #define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
 
 // Directory is a file containing a sequence of dirent structures. // 目录是包含一系列dirent结构的文件
